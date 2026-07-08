@@ -60,6 +60,8 @@
  ├── 5V → MQ-2 / MQ-135 加热丝
  └── 5V → 步进电机驱动
 
+---
+
 ### 项目结构
 ```text
 project/
@@ -154,6 +156,8 @@ project/
 ├── .clang-format                         # 代码格式化规则
 ├── .gitignore                            # Git 忽略规则
 └── README.md                             # 本文件
+
+---
 
 ### 模块详解
 ```c
