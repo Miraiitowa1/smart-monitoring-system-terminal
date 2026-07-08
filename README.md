@@ -52,8 +52,7 @@
 | PC13 | LED | GPIO | 推挽输出 | 板载 LED，低电平点亮 |
 
 ### 电源树
-text
-
+```text
 5V 外部供电
  ├── 3.3V LDO → STM32, OLED, DHT11, 按键上拉
  ├── 5V → ESP8266（需独立供电，峰值电流 ~300mA）
