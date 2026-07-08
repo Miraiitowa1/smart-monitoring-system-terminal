@@ -27,6 +27,8 @@
 - Flash: 64KB / RAM: 20KB
 - 工作电压: 3.3V
 
+---
+
 ### 完整引脚分配
 
 | 引脚 | 功能 | 外设 | 模式 | 说明 |
@@ -60,6 +62,8 @@
  ├── 5V → MQ-2 / MQ-135 加热丝
  └── 5V → 步进电机驱动
 ```
+
+---
 
 ### 项目结构
 ```text
@@ -166,4 +170,68 @@ int main(void)
     App_Init();     // 永不返回，内部包含 while(1) 主循环
 }
 ```
+---
+### 软件架构
+main()
+ └── App_Init()
+      │
+      ├── Delay_Init()               SysTick 时钟源设为 72MHz÷8=9MHz
+      │                               UsCount=9, MsCount=9000（用于阻塞延时）
+      │
+      ├── GENERAL_TIM_Init()         TIM2 使能，PSC=71, Period=999
+      │                               → 1ms 中断 → tick_ms++
+      │                               GetTick_ms() 供按键状态机使用
+      │
+      ├── OLED_Init()                OLED I2C 引脚初始化 + 30+ 条配置命令
+      │                               → OLED_Clear() → OLED_Update()
+      │
+      ├── DHT11_Init()               DHT11 数据线 PB5 配置为推挽输出，初始拉高
+      │
+      ├── Key_Init()                 KEY1(PB12) + KEY2(PB13) 上拉输入
+      │
+      ├── LED_Init()                 LED(PC13) 推挽输出，初始关
+      │
+      ├── ADCx_Init()                ADC1 三通道 DMA 扫描启动
+      │                               → 连续转换，DMA 循环填充 ADCx_Value[3]
+      │
+      ├── Alarm_Init()               蜂鸣器(PA11) 推挽输出，初始关
+      │
+      ├── ESP8266_Init()             ★ 6步 AT 命令序列 ★
+      │    ├── AT                    → 测试
+      │    ├── AT+CWMODE=1           → Station 模式
+      │    ├── AT+CWDHCP=1,1         → DHCP
+      │    ├── AT+CWJAP="SSID","PWD"  → 连接 WiFi（直到获取 IP）
+      │    └── AT+CIPSTART="TCP","mqtts.heclouds.com",1883 → TCP 连云
+      │
+      ├── OLED_Printf("网络连接中...") → OLED_Update()
+      │
+      ├── while(OneNet_DevLink())    MQTT CONNECT 鉴权登录
+      │    └── DelayMs(500)          失败重试
+      │
+      ├── OLED 显示"连接成功"         持续 3 秒后清屏
+      │
+      ├── OneNet_Subscribe(topics,1)  订阅下行控制主题
+      │
+      └── while(1)  ★ 主循环 ★
+           │
+           ├── OLED_Switch()          按键事件处理 + 当前页渲染
+           │    ├── Key_GetEvent(KEY_ID_1)
+           │    ├── Key_GetEvent(KEY_ID_2)
+           │    ├── 单击 → 翻页
+           │    └── switch(currentState) → OLED_Show / Show1~5
+           │         └── Threshold_Adjust() 处理阈值修改（双击/长按）
+           │
+           ├── Alarm_Statue()         报警判断
+           │    └── DHT11_Data.temp_int > Temp_Thr
+           │        || DHT11_Data.humi_int > Humi_Thr
+           │        → Alarm_flag==1 ? ALARM_ON : ALARM_OFF
+           │
+           ├── 每100轮:
+           │    ├── JsonValue()       构造上传 JSON
+           │    ├── OneNet_Publish()  发布到云平台
+           │    ├── ESP8266_Clear()   清接收缓冲
+           │    └── TimeCount = 0
+           │
+           └── ESP8266_GetIPD(2)     轮询下行数据（10ms 超时）
+                └── OneNet_RevPro()   解析并执行云平台指令
 
