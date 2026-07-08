@@ -53,97 +53,81 @@
 
 ### 项目结构
 
-project/
-│
-├── User/ # 用户入口层
-│ ├── main.c # main() 入口，直接调用 App_Init()
-│ ├── stm32f10x_it.c # 中断向量表实现（SysTick, HardFault 等异常处理）
-│ ├── stm32f10x_it.h # 中断函数声明
-│ └── stm32f10x_conf.h # 标准外设库配置（include 哪些外设驱动、assert 开关）
-│
-├── APP/ # 应用逻辑层
-│ ├── app_init.c # ★核心文件★ 系统初始化、主循环、OLED 6页面渲染、按键事件分发
-│ └── app_init.h # 应用层头文件（全局变量 extern 声明、include 汇总）
-│ ├── app_alarm.c # 蜂鸣器 GPIO 初始化
-│ └── app_alarm.h # 蜂鸣器/LED 宏定义（ALARM_ON / ALARM_OFF）
-│
-├── BSP/ # 板级驱动层（BSP = Board Support Package）
-│ ├── bsp_oled.c # OLED 驱动（1.5K行）— I2C 软件模拟、显存管理、完整 2D 图形库
-│ ├── bsp_oled.h # OLED API 声明（ShowChar/String/Num/Image/DrawLine/Circle/...)
-│ ├── bsp_oledfont.c # 字模数据 — ASCII 6x8/8x16 + 中文 16x16（带 UTF-8/GB2312 双编码检索）
-│ ├── bsp_oledfont.h # 字模结构体定义
-│ ├── bsp_dht11.c # DHT11 单总线驱动 — 复位脉冲 + 40bit 读取 + 校验
-│ ├── bsp_dht11.h # DHT11 数据结构体 + 引脚宏
-│ ├── bsp_adc.c # ADC1 三通道 DMA 扫描 — 火焰/MQ-2/MQ-135 共用
-│ ├── bsp_adc.h # ADC 引脚宏 + 通道号 + ADCx_PPM() 声明
-│ ├── bsp_key.c # 按键状态机 — 5状态检测单击/双击/长按（基于 1ms tick）
-│ ├── bsp_key.h # KeyEvent 枚举 + Key_GetEvent() API
-│ ├── bsp_led.c # LED GPIO 初始化
-│ ├── bsp_led.h # LED_ON / LED_OFF 宏定义
-│ ├── bsp_usart.c # USART1 (ESP8266) + USART3 (调试) — 初始化/发送/Printf
-│ ├── bsp_usart.h # USART 宏 + USART_DEBUG 定义
-│ ├── bsp_timer.c # TIM2 初始化 + 1ms 中断 + GetTick_ms() 全局时钟
-│ ├── bsp_timer.h # TIM2 宏 + GetTick_ms() 声明
-│ ├── bsp_flame.c / .h # （预留）火焰传感器独立读取 — 实际未使用
-│ ├── bsp_mq2.c / .h # （预留）MQ-2 独立读取 — 实际未使用
-│ ├── bsp_mq135.c / .h # （预留）MQ-135 独立读取 — 实际未使用
-│ ├── bsp_steppermotor.c / .h # 步进电机驱动 — 4拍/8拍/正反转/角度控制
-│ ├── relay.c / .h # 继电器初始化 + RELAY_ON/OFF 宏
-│
-├── SYSTEM/ # 系统组件层
-│ ├── bsp_delay.c # SysTick 阻塞延时 — DelayUs() / DelayMs()
-│ ├── bsp_delay.h # 延时函数声明
-│ ├── bsp_filter.c # 一阶互补滤波器 — 低通+高通混合
-│ ├── bsp_filter.h # Filter 结构体 + Filter_Init() / FilterValue()
-│ └── sys.h # STM32 类型别名（u8=uint8_t, u16=uint16_t, u32=uint32_t）
-│
-├── WIFI/ # 网络通信层
-│ ├── esp8266.c # ESP8266 AT 指令驱动 — 初始化/WiFi连接/TCP透传/接收解析
-│ ├── esp8266.h # ESP8266 API 声明 + REV_OK/REV_WAIT 宏
-│ ├── onenet.c # OneNET 平台适配 — DevLink登录/Subscribe订阅/Publish发布/RevPro接收
-│ ├── onenet.h # OneNET API 声明
-│ ├── MqttKit.c # MQTT 3.1.1 协议栈 — CONNECT/SUBSCRIBE/PUBLISH 组包解包 + 内存管理
-│ ├── MqttKit.h # MQTT 包类型枚举/QoS等级/标志位 + 全部 API 声明
-│ ├── cJSON.c # JSON 解析库（cJSON 标准实现）
-│ ├── cJSON.h # cJSON API 声明
-│ └── Common.h # MQTT 层通用类型（uint1, uint8, int16, size_t 等）
-│
-├── Library/ # STM32F10x 标准外设库 V3.5.0
-│ ├── stm32f10x_gpio.c / .h # GPIO 外设驱动
-│ ├── stm32f10x_rcc.c / .h # 时钟系统驱动
-│ ├── stm32f10x_usart.c / .h # 串口外设驱动
-│ ├── stm32f10x_adc.c / .h # ADC 外设驱动
-│ ├── stm32f10x_dma.c / .h # DMA 外设驱动
-│ ├── stm32f10x_tim.c / .h # 定时器外设驱动
-│ ├── stm32f10x_spi.c / .h # SPI 外设驱动
-│ ├── stm32f10x_i2c.c / .h # I2C 外设驱动
-│ ├── stm32f10x_exti.c / .h # 外部中断驱动
-│ ├── stm32f10x_flash.c / .h # Flash 驱动
-│ ├── misc.c / .h # NVIC 中断优先级管理
-│ └── ...（其余外设驱动）
-│
-├── Startup/ # 启动层
-│ ├── startup_stm32f10x_md.s # 启动汇编（向量表 + Reset_Handler）
-│ ├── system_stm32f10x.c # 系统时钟初始化 SystemInit()
-│ ├── system_stm32f10x.h # 系统时钟声明
-│ ├── stm32f10x.h # 芯片顶层头文件（寄存器定义）
-│ └── core_cm3.c / .h # CMSIS Core（NVIC/SysTick 寄存器）
-│
-├── DebugConfig/ # Keil 调试器配置
-│ └── Target_1_STM32F103C8_1.0.0.dbgconf
-│
-├── .cmsis/ # CMSIS Pack（ARM Cortex-A 支持文件，本项目未使用）
-├── .eide/ # EIDE 插件配置
-├── .vscode/ # VS Code 配置
-├── build/ # 编译中间文件
-├── Listings/ # .map / .lst 链接输出
-├── Objects/ # .o / .axf / .hex 目标文件
-│
-├── project.uvprojx # Keil MDK 工程文件
-├── project.uvoptx # Keil 工程选项
-├── project.uvguix.xf # Keil 用户布局
-├── project.code-workspace # VS Code 工作区
-├── .clang-format # 代码格式化规则
-├── .gitignore # Git 忽略规则
-└── README.md # 本文件
+   520  main()
+      521   └── App_Init()
+       78 -      ├── Delay_Init()          SysTick 延时初始化
+       79 -      ├── GENERAL_TIM_Init()    TIM2 1ms 时基启动
+       80 -      ├── OLED_Init()           OLED 初始化 + 清屏
+       81 -      ├── DHT11_Init()          DHT11 GPIO 配置
+       82 -      ├── Key_Init()            按键 GPIO 配置
+       83 -      ├── LED_Init()            LED GPIO 配置
+       84 -      ├── ADCx_Init()           ADC1+DMA 三通道连续扫描
+       85 -      ├── Alarm_Init()          蜂鸣器 GPIO 配置
+       86 -      ├── ESP8266_Init()        ESP8266 AT 初始化 → WiFi → TCP 连云
+       87 -      ├── OneNet_DevLink()      MQTT CONNECT 鉴权登录
+       88 -      ├── OneNet_Subscribe()    订阅下行控制主题
+       89 -      └── while(1)              主循环
+       90 -           ├── OLED_Switch()    按键处理 + 界面显示
+       91 -           ├── Alarm_Statue()   报警判断
+       92 -           └── 数据定时上传     OneNet_Publish() 每 100 轮
+      522 +      │
+      523 +      ├── Delay_Init()               SysTick 时钟源设为 72MHz÷8=9MHz
+      524 +      │                               UsCount=9, MsCount=9000（用于阻塞延时）
+      525 +      │
+      526 +      ├── GENERAL_TIM_Init()         TIM2 使能，PSC=71, Period=999
+      527 +      │                               → 1ms 中断 → tick_ms++
+      528 +      │                               GetTick_ms() 供按键状态机使用
+      529 +      │
+      530 +      ├── OLED_Init()                OLED I2C 引脚初始化 + 30+ 条配置命令
+      531 +      │                               → OLED_Clear() → OLED_Update()
+      532 +      │
+      533 +      ├── DHT11_Init()               DHT11 数据线 PB5 配置为推挽输出，初始拉高
+      534 +      │
+      535 +      ├── Key_Init()                 KEY1(PB12) + KEY2(PB13) 上拉输入
+      536 +      │
+      537 +      ├── LED_Init()                 LED(PC13) 推挽输出，初始关
+      538 +      │
+      539 +      ├── ADCx_Init()                ADC1 三通道 DMA 扫描启动
+      540 +      │                               → 连续转换，DMA 循环填充 ADCx_Value[3]
+      541 +      │
+      542 +      ├── Alarm_Init()               蜂鸣器(PA11) 推挽输出，初始关
+      543 +      │
+      544 +      ├── ESP8266_Init()             ★ 6步 AT 命令序列 ★
+      545 +      │    ├── AT                    → 测试
+      546 +      │    ├── AT+CWMODE=1           → Station 模式
+      547 +      │    ├── AT+CWDHCP=1,1         → DHCP
+      548 +      │    ├── AT+CWJAP="SSID","PWD"  → 连接 WiFi（直到获取 IP）
+      549 +      │    └── AT+CIPSTART="TCP","mqtts.heclouds.com",1883 → TCP 连云
+      550 +      │
+      551 +      ├── OLED_Printf("网络连接中...") → OLED_Update()
+      552 +      │
+      553 +      ├── while(OneNet_DevLink())    MQTT CONNECT 鉴权登录
+      554 +      │    └── DelayMs(500)          失败重试
+      555 +      │
+      556 +      ├── OLED 显示"连接成功"         持续 3 秒后清屏
+      557 +      │
+      558 +      ├── OneNet_Subscribe(topics,1)  订阅下行控制主题
+      559 +      │
+      560 +      └── while(1)  ★ 主循环 ★
+      561 +           │
+      562 +           ├── OLED_Switch()          按键事件处理 + 当前页渲染
+      563 +           │    ├── Key_GetEvent(KEY_ID_1)
+      564 +           │    ├── Key_GetEvent(KEY_ID_2)
+      565 +           │    ├── 单击 → 翻页
+      566 +           │    └── switch(currentState) → OLED_Show / Show1~5
+      567 +           │         └── Threshold_Adjust() 处理阈值修改（双击/长按）
+      568 +           │
+      569 +           ├── Alarm_Statue()         报警判断
+      570 +           │    └── DHT11_Data.temp_int > Temp_Thr
+      571 +           │        || DHT11_Data.humi_int > Humi_Thr
+      572 +           │        → Alarm_flag==1 ? ALARM_ON : ALARM_OFF
+      573 +           │
+      574 +           ├── 每100轮:
+      575 +           │    ├── JsonValue()       构造上传 JSON
+      576 +           │    ├── OneNet_Publish()  发布到云平台
+      577 +           │    ├── ESP8266_Clear()   清接收缓冲
+      578 +           │    └── TimeCount = 0
+      579 +           │
+      580 +           └── ESP8266_GetIPD(2)     轮询下行数据（10ms 超时）
+      581 +                └── OneNet_RevPro()   解析并执行云平台指令
 
