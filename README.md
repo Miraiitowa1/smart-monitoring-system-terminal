@@ -19,14 +19,11 @@
 ### 硬件平台
 
 #### MCU: STM32F103C8T6
-
 - 内核: ARM Cortex-M3 @ 72MHz
 - Flash: 64KB / RAM: 20KB
 - 工作电压: 3.3V
----
 
 ### 完整引脚分配
-
 | 引脚 | 功能 | 外设 | 模式 | 说明 |
 |------|------|------|------|------|
 | PA0 | RELAY | GPIO | 推挽输出 | 继电器控制，高电平吸合 |
@@ -332,7 +329,7 @@ MQTT_UnPacketRecv(cmd) 识别包类型
   ├─ MQTT_PKT_PUBACK → 打印 "Publish Send OK"
   └─ ...
 ```
-
+---
 
 ### 软件架构
 ```text
@@ -400,6 +397,7 @@ main()
                 └── OneNet_RevPro()   解析并执行云平台指令
 ```
 ---
+
 ### 界面与按键
 ```text
      单击 KEY1 (→)                    单击 KEY2 (←)
@@ -419,9 +417,10 @@ main()
   (0,50)  "Mq135_ppm:3456.78"     6×8 字体
 ```
 ---
+
 ### 传感器数据处理
-```text
 #### dht11
+```text
 DHT11_Read_TempAndHumidity(&DHT11_Data)
   ├─ 发送起始脉冲（20ms 低 + 13us 高）
   ├─ 检测 DHT11 响应（80us 低 + 80us 高）
@@ -429,8 +428,9 @@ DHT11_Read_TempAndHumidity(&DHT11_Data)
   └─ 校验: check_sum == humi_int + humi_deci + temp_int + temp_deci ?
       ├─ 是 → 返回 SUCCESS，数据存入 DHT11_Data 全局结构体
       └─ 否 → 返回 ERROR，OLED 不显示温湿度行
-
+```
 #### adc
+```text
 ADC1 硬件
   ├─ 序列1: CH1 (PA1) → DR → DMA → ADCx_Value[0]  (MQ-2)
   ├─ 序列2: CH2 (PA2) → DR → DMA → ADCx_Value[1]  (火焰)
@@ -449,6 +449,7 @@ ADC1 硬件
        └─ FilterValue(&filter[channel], raw_ppm)  ← 一阶互补滤波
 ```
 ---
+
 ### 云平台通信
 #### stage1 ESP8266 初始化 & WiFi 连接
 ```text
