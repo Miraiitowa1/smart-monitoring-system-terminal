@@ -1,0 +1,6 @@
+--c99 -c --cpu Cortex-M3 -D__MICROLIB -g -O0 --apcs=interwork --split_sections -I .\Library -I .\Startup -I .\User -I .\APP -I .\BSP -I .\SYSTEM -I .\WIFI --no-multibyte-chars
+-I.\RTE\_Target_1
+-IE:\Keil\ARM\PACK\Keil\STM32F1xx_DFP\2.3.0\Device\Include
+-IE:\Keil\ARM\CMSIS\Include
+-D__UVISION_VERSION="524" -DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER
+-o .\objects\bsp_dht11.o --omf_browse .\objects\bsp_dht11.crf --depend .\objects\bsp_dht11.d --feedback ".\Objects\project.fed" "BSP\bsp_dht11.c"
