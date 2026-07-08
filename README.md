@@ -167,6 +167,26 @@ int main(void)
     App_Init();     // 永不返回，内部包含 while(1) 主循环
 }
 ```
+#### bsp_oled.c驱动
+```text
+应用层调用:
+  OLED_ShowString() / OLED_Printf() / OLED_ShowNum()
+  OLED_ShowImage() / OLED_DrawLine() / OLED_DrawCircle() ...
+       │
+       ▼ 操作显存数组
+  OLED_DisplayBuf[8][128]           ← 128×64 像素缓冲区（8页 × 128列）
+       │
+       ▼ OLED_Update() 刷屏
+  OLED_WriteData() → OLED_I2C_SendByte() → OLED_W_SDA() / OLED_W_SCL()
+       │
+       ▼ 软件模拟 I2C
+  GPIOB PB6(SCL) / PB7(SDA) 开漏输出
+       │
+       ▼ I2C 总线
+  SSD1306 OLED 控制器
+```
+
+
 ---
 
 ### 软件架构
