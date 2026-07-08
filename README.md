@@ -13,8 +13,6 @@
 5. [界面与按键](#界面与按键)
 6. [传感器数据处理](#传感器数据处理)
 7. [云平台通信](#云平台通信)
-8. [中断与定时器](#中断与定时器)
-9. [开发环境](#开发环境)
 
 ---
 
@@ -403,11 +401,137 @@ main()
 ```
 ---
 ### 界面与按键
+```text
+     单击 KEY1 (→)                    单击 KEY2 (←)
+     ───────────                      ───────────
 
+  MAIN_MENU ──→ TEMP_SET ──→ HUMI_SET ──→ FLAME_SET ──→ MQ2_SET ──→ MQ135_SET
+      ↑                                                                    │
+      └────────────────────────────────────────────────────────────────────┘
+       ←────────────────────────────────────────────────────────────────────
+                           单击 KEY2 (←)
+
+  (24,0)  "Smart Kitchen"         6×8 字体
+  (0,10)  "Temp:25.3"             6×8 字体
+  (0,20)  "Humi:60%"              6×8 字体
+  (0,30)  "Flame_ppm:1234.56"     6×8 字体
+  (0,40)  "Mq2_ppm:2345.67"       6×8 字体
+  (0,50)  "Mq135_ppm:3456.78"     6×8 字体
+```
+---
 ### 传感器数据处理
+```text
+#### dht11
+DHT11_Read_TempAndHumidity(&DHT11_Data)
+  ├─ 发送起始脉冲（20ms 低 + 13us 高）
+  ├─ 检测 DHT11 响应（80us 低 + 80us 高）
+  ├─ 读取 5 字节（40bit）
+  └─ 校验: check_sum == humi_int + humi_deci + temp_int + temp_deci ?
+      ├─ 是 → 返回 SUCCESS，数据存入 DHT11_Data 全局结构体
+      └─ 否 → 返回 ERROR，OLED 不显示温湿度行
 
+#### adc
+ADC1 硬件
+  ├─ 序列1: CH1 (PA1) → DR → DMA → ADCx_Value[0]  (MQ-2)
+  ├─ 序列2: CH2 (PA2) → DR → DMA → ADCx_Value[1]  (火焰)
+  └─ 序列3: CH3 (PA3) → DR → DMA → ADCx_Value[2]  (MQ-135)
+       │
+       ▼ 每个通道约 4.6us × 3 = ~14us 完成一轮
+       │ 连续循环（DMA 循环模式）
+       │
+  OLED_Show() / OLED_Show3/4/5 调用 ADCx_PPM(channel)
+       │
+       ├─ 读取 volatile ADCx_Value[channel]（最新 DMA 数据）
+       ├─ voltage = ADC × 5.0 / 4096
+       ├─ RS = (5.0 - V) / (V × 0.5)
+       ├─ ratio = RS / 6.64
+       ├─ raw_ppm = 11.5428 × ratio^(-0.6549)
+       └─ FilterValue(&filter[channel], raw_ppm)  ← 一阶互补滤波
+```
+---
 ### 云平台通信
-
-### 中断和定时器
-
-### 开发环境
+#### stage1 ESP8266 初始化 & WiFi 连接
+```text
+ESP8266_Init()
+  │
+  ├─[AT] 测试模块存在 ──→ 收到 "OK" ✓
+  ├─[AT+CWMODE=1] 设为 Station ──→ "OK" ✓
+  ├─[AT+CWDHCP=1,1] 开启 DHCP ──→ "OK" ✓
+  ├─[AT+CWJAP="SSID","PWD"] 连 WiFi ──→ "GOT IP" ✓ (最多等 10s)
+  └─[AT+CIPSTART="TCP","mqtts.heclouds.com",1883] ──→ "CONNECT" ✓
+```
+#### stage2 MQTT 登录鉴权
+```text
+OneNet_DevLink()
+  │
+  ├─ MQTT_PacketConnect(PROID, TOKEN, DEVID, 256s KeepAlive, QoS0, ...)
+  │    构建 CONNECT 报文（~120 字节）
+  │
+  ├─ ESP8266_SendData(packet, len)
+  │    发送 AT+CIPSEND=120 → 等 '>' → 发送 120 字节 MQTT CONNECT
+  │
+  ├─ ESP8266_GetIPD(250)  等待服务器响应（超时 250×5ms=1.25s）
+  │    收到 ESP8266 返回: "+IPD,4:<4字节 CONNACK>"
+  │
+  └─ MQTT_UnPacketConnectAck(dataPtr)
+       ├─ 返回码 0 → 连接成功，status=0
+       ├─ 返回码 1 → 协议错误
+       ├─ 返回码 2 → ClientID 非法
+       ├─ 返回码 3 → 服务器不可用
+       ├─ 返回码 4 → 用户名或密码错误
+       └─ 返回码 5 → 未授权（Token 非法）
+```
+#### stage3 订阅下行主题
+```text
+OneNet_Subscribe({"$sys/XPz90SBcDh/test/thing/property/set"}, 1)
+  │
+  ├─ MQTT_PacketSubscribe(20, QoS0, topics, 1, &pkt)
+  ├─ ESP8266_SendData(pkt._data, pkt._len)
+  └─ MQTT_DeleteBuffer(&pkt)
+```
+#### stage4 主循环
+##### 上行
+```text
+TimeCount 累加到 100
+  │
+  ├─ JsonValue()
+  │    sprintf(PUBLIS_BUF,
+  │      "{\"id\":\"123\",\"params\":{"
+  │        "\"Buzzer\":{\"value\":%s},"
+  │        "\"Temp\":{\"value\":%d},"
+  │        "\"LED\":{\"value\":%s},"
+  │        "\"Humi\":{\"value\":%d}"
+  │      "}}",
+  │      "false",                  // Buzzer 写死为 false
+  │      DHT11_Data.temp_int,       // 当前温度整数
+  │      "true",                   // LED 写死为 true
+  │      DHT11_Data.humi_int);      // 当前湿度整数
+  │
+  ├─ OneNet_Publish("$sys/.../post", PUBLIS_BUF)
+  │    ├─ MQTT_PacketPublish(10, topic, msg, strlen(msg), QoS0, retain=0, own=1)
+  │    ├─ ESP8266_SendData(pkt._data, pkt._len)
+  │    └─ MQTT_DeleteBuffer(&pkt)
+  │
+  └─ ESP8266_Clear()  清空接收缓冲
+       TimeCount = 0
+```
+##### 下行
+```text
+ESP8266_GetIPD(2)  // 超时 10ms
+  │
+  ├─ 无数据 → 返回 NULL → 跳过
+  │
+  └─ 有数据 → 返回 MQTT 报文字节指针
+       │
+       └─ OneNet_RevPro(dataPtr)
+            │
+            ├─ MQTT_UnPacketRecv() 识别类型
+            │
+            ├─ PUBLISH 类型 → 解析 JSON
+            │    └─ 云平台下发格式示例:
+            │       {"params":{"LED":{"value":true}}}
+            │       {"params":{"Alarm":{"value":false}}}
+            │       {"params":{"LED":{"value":true},"Alarm":{"value":true}}}
+            │
+            └─ CMD 类型 → 回复 $crsp
+```
