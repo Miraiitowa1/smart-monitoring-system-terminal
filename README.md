@@ -160,6 +160,7 @@ project/
 ---
 
 ### 模块详解
+#### main.c
 ```c
 #include "app_init.h"
 int main(void)
@@ -167,7 +168,7 @@ int main(void)
     App_Init();     // 永不返回，内部包含 while(1) 主循环
 }
 ```
-#### bsp_oled.c驱动
+#### bsp_oled.c
 ```text
 应用层调用:
   OLED_ShowString() / OLED_Printf() / OLED_ShowNum()
@@ -185,9 +186,155 @@ int main(void)
        ▼ I2C 总线
   SSD1306 OLED 控制器
 ```
+#### bsp_dth11.c
+```text
+主机发送起始信号:
+  DHT11_Dout_0    拉低 20ms
+  DHT11_Dout_1    拉高 13us
+  切换为输入模式  等待 DHT11 响应
 
+DHT11 响应:
+  拉低 80us → 拉高 80us → 开始发送 40bit 数据
 
----
+40bit 数据格式:
+  [湿度整数 8bit] [湿度小数 8bit] [温度整数 8bit] [温度小数 8bit] [校验和 8bit]
+  校验和 = 前 4 字节之和的低 8 位
+
+每 bit 编码:
+  起始: 50us 低电平
+  数据 0: 26~28us 高电平
+  数据 1: 70us 高电平
+  读取方式: 等 40us 后采样 GPIO 电平（0 已结束，1 仍在持续）
+```
+#### bsp_adc.c+bsp_filter.c
+```text
+voltage = ADC_Value × 5.0 / 4096
+RS      = (5.0 - voltage) / (voltage × 0.5)    // 传感器电阻
+R0      = 6.64                                  // 标定电阻 (kΩ)
+ratio   = RS / R0
+PPM     = FilterValue( 11.5428 × ratio^(-0.6549) )  // 幂函数拟合 + 一阶互补滤波
+
+out(t) = α × LowPass(t) + (1-α) × HighPass(t)
+LowPass(t)  = α × in(t) + (1-α) × out(t-1)
+HighPass(t) = α × out(t-1) + α × (in(t) - in(t-1))
+α = 0.2
+```
+#### bsp_key.c
+```text
+                    ┌──────────────────────────────────────────┐
+                    │                                          │
+       edge_down    ▼    debounce_ok       edge_up + long      │
+ IDLE ──────────→ DEBOUNCE_PRESS ────────→ PRESSED ───────────┤
+   ▲               │        ▲               │    │             │
+   │    timeout    │  jitter│               │    │ time>=600ms │
+   │    (350ms)    │  (不满足│消抖时间)       │    ▼             │
+   │               ▼        │               │  return LONG_PRESS
+   └──── WAIT_DOUBLE ───────┘               │    │ (仅首次)
+        (debounce_ok)                        │    │ time>=680ms
+          │                                  │    ▼
+          │ edge_down                        │  return LONG_HOLD
+          │ (第二次按下)                        │    │ (每80ms连发)
+          └──────────────────────────────────┘    │
+                                                  │ edge_up (非长按)
+                                                  ▼
+                                            DEBOUNCE_RELEASE
+                                                  │
+                                    debounce_ok   │
+                          ┌───────────────────────┤
+                          ▼                       ▼
+                    from_double=1?          from_double=0?
+                    是 → IDLE                否 → WAIT_DOUBLE
+                    返回 DOUBLE_CLICK             │
+                                                  │ 等 350ms
+                                                  ▼
+                                                IDLE
+                                                返回 CLICK
+```
+#### esp8266.c
+```text
+1. AT                    → 等待 "OK"          测试模块
+2. AT+CWMODE=1           → 等待 "OK"          设为 Station 模式
+3. AT+CWDHCP=1,1         → 等待 "OK"          开启 DHCP
+4. AT+CWJAP="SSID","PWD" → 等待 "GOT IP"      连接 WiFi 路由器
+5. AT+CIPSTART="TCP",    → 等待 "CONNECT"     建立 TCP 连接到
+   "mqtts.heclouds.com",1883                    OneNET MQTT Broker
+
+USART1 RX 中断 (USART1_IRQHandler)
+  每收到 1 字节 → esp8266_buf[esp8266_cnt++] = USART1->DR
+  缓冲区大小: 512 字节，溢出回绕 (cnt 归零)
+
+ESP8266_WaitRecive()
+  在当前和上一次 cnt 相同时判断接收完毕（简单停顿检测）
+  问题: 网络延迟大时可能误判——改进方向: 用帧头尾匹配或超时机制
+
+ESP8266_SendCmd(cmd, expected_response)
+  1. Usart_SendString(USART1, cmd, len)  发送 AT 命令
+  2. 循环 200 次 × 10ms = 最多等待 2 秒
+  3. 每次调用 ESP8266_WaitRecive() 检查是否收到数据
+  4. strstr(buf, expected_response) 匹配期望响应
+  5. 匹配成功 → 返回 0；超时 → 返回 1
+
+ESP8266_SendData(data, len)
+  1. 发送 "AT+CIPSEND=<len>\r\n"
+  2. 等待 '>' 提示符
+  3. 直接发送 len 字节原始数据（透传）
+
+1. 等待接收完成（每次 5ms × timeout 次 = 最多 10ms timeout）
+2. 在 esp8266_buf 中搜索 "IPD," 字符串
+3. 找到后定位 ':' 分隔符
+4. 返回 ':' 后第一个字节的指针 → 即 MQTT 原始报文
+5. 超时 → 返回 NULL
+```
+#### MqttKit.c 
+```text
+// Common.h 宏定义
+#define MQTT_MallocBuffer  malloc    // 使用 C 标准库堆分配
+#define MQTT_FreeBuffer    free
+
+// MQTT_PACKET_STRUCTURE 结构体
+typedef struct Buffer {
+    uint8  *_data;      // 数据指针
+    uint32 _len;        // 当前数据长度
+    uint32 _size;       // 总缓冲区大小
+    uint8  _memFlag;    // MEM_FLAG_ALLOC (malloc) / MEM_FLAG_STATIC (固定数组)
+} MQTT_PACKET_STRUCTURE;
+
+固定头:   [1byte 类型=0x10] [1~4byte 剩余长度]
+可变头:   [协议名 "MQTT"] [协议级别 4] [连接标志] [KeepAlive 256s]
+Payload:  [ClientID "test"] [Username "XPz90SBcDh"] [Password Token]
+
+固定头:   [1byte 类型=0x30 | QoS | Retain] [1~4byte 剩余长度]
+可变头:   [2byte Topic长度] [Topic字符串] [2byte PacketID(仅QoS>0)]
+Payload:  [消息体字节流]
+```
+#### onenet.c
+```text
+上行 Topic
+$sys/XPz90SBcDh/test/thing/property/post
+下行 Topic
+$sys/XPz90SBcDh/test/thing/property/set
+MQTT_UnPacketRecv(cmd) 识别包类型
+  │
+  ├─ MQTT_PKT_CMD (命令下发)
+  │    ├─ MQTT_UnPacketCmd() 解出 cmdid + req_body
+  │    └─ MQTT_PacketCmdResp() 组包回复 $crsp/cmdid
+  │
+  ├─ MQTT_PKT_PUBLISH (属性下发)
+  │    ├─ MQTT_UnPacketPublish() 解出 topic + payload
+  │    ├─ cJSON_Parse(payload) 解析 JSON
+  │    ├─ 提取 "params" → "LED" 字段
+  │    │    ├─ type == cJSON_True  → LED_ON
+  │    │    └─ type == cJSON_False → LED_OFF
+  │    ├─ 提取 "params" → "Alarm" 字段
+  │    │    ├─ type == cJSON_True  → Alarm_flag = 1
+  │    │    └─ type == cJSON_False → Alarm_flag = 0
+  │    └─ cJSON_Delete(json) 释放内存
+  │
+  ├─ MQTT_PKT_SUBACK → 打印 "Subscribe OK"
+  ├─ MQTT_PKT_PUBACK → 打印 "Publish Send OK"
+  └─ ...
+```
+
 
 ### 软件架构
 ```text
