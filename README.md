@@ -26,24 +26,31 @@
 ### 完整引脚分配
 | 引脚 | 功能 | 外设 | 模式 | 说明 |
 |------|------|------|------|------|
-| PA0 | RELAY | GPIO | 推挽输出 | 继电器控制，高电平吸合 |
 | PA1 | MQ-2 AO | ADC1 CH1 | 模拟输入 | 烟雾浓度模拟量 |
 | PA2 | FLAME AO | ADC1 CH2 | 模拟输入 | 火焰传感器模拟量 |
 | PA3 | MQ-135 AO | ADC1 CH3 | 模拟输入 | 空气质量模拟量 |
+| PA4 | AIN1 | TIM |  | PWM调频 |
+| PA5 | AIN2 | TIM |  | PWM调频 |
+| PA6 | RELAY1 | GPIO | 推挽输出 | 继电器控制，高电平吸合 |
+| PA7 | REALY2 | GPIO | 推挽输出 | 继电器控制，高电平吸合 |
 | PA9 | ESP8266 RX | USART1 TX | 复用推挽 | STM32 → ESP8266 |
 | PA10 | ESP8266 TX | USART1 RX | 上拉输入 | ESP8266 → STM32 |
 | PA11 | BUZZER | GPIO | 推挽输出 | 蜂鸣器，高电平响 |
-| PB5 | DHT11 DAT | GPIO | 双向(OD+IPU) | 单总线数据线 |
+| PB0 | PWMA | TIM |  | A路数据线 |
+| PB1 | PWMB | TIM |  | B路数据线 |
+| PB3 | BIN1 | TIM |  | PWM调频 |
+| PB4 | BIN2 | TIM |  | PWM调频 |
+| PB5 | DHT11_DATA | GPIO | 双向(OD+IPU) | 单总线数据线 |
 | PB6 | OLED SCL | GPIO | 开漏输出 | I2C 时钟线（软件模拟） |
 | PB7 | OLED SDA | GPIO | 开漏输出 | I2C 数据线（软件模拟） |
-| PB8 | STEP A | GPIO | 推挽输出 | 步进电机 A 相 |
-| PB9 | STEP B | GPIO | 推挽输出 | 步进电机 B 相 |
-| PB10 | DEBUG TX | USART3 TX | 复用推挽 | 调试串口发送 |
-| PB11 | DEBUG RX | USART3 RX | 上拉输入 | 调试串口接收 |
+| PB8 | STEP_A | GPIO | 推挽输出 | 步进电机 A 相 |
+| PB9 | STEP_B | GPIO | 推挽输出 | 步进电机 B 相 |
+| PB10 | SER_TX | USART3 TX | 复用推挽 | 调试串口发送 |
+| PB11 | SER_RX | USART3 RX | 上拉输入 | 调试串口接收 |
 | PB12 | KEY1 | GPIO | 上拉输入 | 按键 1，按下低电平 |
 | PB13 | KEY2 | GPIO | 上拉输入 | 按键 2，按下低电平 |
-| PB14 | STEP C | GPIO | 推挽输出 | 步进电机 C 相 |
-| PB15 | STEP D | GPIO | 推挽输出 | 步进电机 D 相 |
+| PB14 | STEP_C | GPIO | 推挽输出 | 步进电机 C 相 |
+| PB15 | STEP_D | GPIO | 推挽输出 | 步进电机 D 相 |
 | PC13 | LED | GPIO | 推挽输出 | 板载 LED，低电平点亮 |
 
 ### 电源树
